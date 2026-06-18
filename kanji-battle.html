@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<title>漢字バトル</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800&family=Noto+Serif+JP:wght@700;900&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans JP',sans-serif;background:#f2ede6;overflow-x:hidden;}
+rt{font-size:0.55em;}
+@keyframes bounce{0%{transform:scale(1)}30%{transform:scale(1.3) rotate(-10deg)}60%{transform:scale(0.95) rotate(5deg)}100%{transform:scale(1)}}
+@keyframes pop{0%{opacity:0;transform:scale(0.7) translateY(6px)}70%{transform:scale(1.05) translateY(-2px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+canvas{display:block;}
+.btn{border:none;cursor:pointer;font-family:'Noto Sans JP',sans-serif;font-weight:700;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script>
+const {createElement:h,useState,useRef,useEffect,useCallback,Fragment}=React;
+
+// ===== ルビ =====
+const R=({k,r})=>h('ruby',null,h('span',null,k),h('rp',null,'（'),h('rt',{style:{fontSize:'0.55em'}},r),h('rp',null,'）'));
+
+// ===== キャラクター =====
+const CHARACTERS=[
+  {id:'tiger',emoji:'🐯',name:'トラ',lines:{
+    ready_questioner:['さあもんだいをえらぶぞ！🔥','どんなかんじをだすかな？😤','まけるなよ！きあいをいれろ！💪'],
+    ready_answerer:['まてよ、しっかりみてろ！👀','おちついて、ゆっくりかけ！✏️','できる！かならずできるぞ！'],
+    answer_answerer:['かけ！いまがチャンスだ！💥','しっかりかくんだ！まけるな！','ラストスパート！がんばれ！🔥'],
+    answer_questioner:['さいてんのじゅんびをしろ！👁️','よくみてあげるんだぞ！','ただしいさいてんをたのむぞ！'],
+    correct2:['かきじゅんもかんぺき！すごいぞ！🎉','やったー！２ポイント！さいこう！🏆','それがほんものの実力だ！🔥'],
+    correct1:['せいかい！よくやった！✨','かけたぞ！えらい！👏','そのちょうしだ！つぎもがんばれ！'],
+    wrong:['ドンマイ！つぎにかけ！💪','まけるな！またチャンスはくる！','あきらめるな！まだまだだ！🔥'],
+    pass:['パスか…つぎにいけ！😤','しかたない！つぎこそだ！','きあいをいれなおせ！💪'],
+    turnaround:['ターンこうたい！きりかえていけ！🔥','つぎはおまえのターンだ！がんばれ！','よし、こうたいだ！きあいをいれろ！'],
+    winning:['リードしてるぞ！このままいけ！🏆','すごい！このちょうしだ！🔥','つよい！まけるな！'],
+    losing:['おいつけ！まだまだあきらめるな！💪','ここからだ！まけるな！','あきらめたらそこでしあいしゅうりょうだ！'],
+    tied:['どちらもいい勝負だ！','同点！どっちがかつかな？😤','はくちゅうだ！さいごまであきらめるな！'],
+  }},
+  {id:'fox',emoji:'🦊',name:'キツネ',lines:{
+    ready_questioner:['むずかしいもんだいをだしてみて♪','どんなかんじがいいかしら？✨','しっかりえらんでね！'],
+    ready_answerer:['だいじょうぶ！あなたならかけるよ！💕','ゆっくりおちついてね✨','きっとできる！おうえんしてるよ！🦊'],
+    answer_answerer:['がんばって！かけるよ！💕','じっくりかんがえてかいてね✨','すてきなかんじをかいてね🦊'],
+    answer_questioner:['しっかりみてあげてね！👀','やさしくさいてんしてあげて♪','せいかくにさいてんしてね💕'],
+    correct2:['すごーい！かんぺき！🎉✨','かきじゅんもばっちり！かしこい！💕','やったね！２ポイントだよ！🦊🎉'],
+    correct1:['せいかい！よくできました！✨','かけたね！えらい！💕','そのちょうしでいこう！🦊'],
+    wrong:['ドンマイ！つぎがあるよ！💕','だいじょうぶ！おちついて！✨','つぎはかけるよ！おうえんしてる！🦊'],
+    pass:['パスもときにはひつようよ！✨','つぎのもんだいでがんばろう！💕','きりかえてがんばって🦊'],
+    turnaround:['こうたい！きもちをきりかえて！✨','つぎのターンでがんばろう！💕','フレッシュなきもちでいこう！🦊'],
+    winning:['このちょうしでいこう！✨','すごいね！このままがんばって！💕','リードしてるよ！💪🦊'],
+    losing:['まだあきらめないで！💕','ここからおいあげよう！✨','だいじょうぶ！まだまだよ！🦊'],
+    tied:['いいしょうぶね！✨','どっちもがんばってる！💕','さいごまでわからないね🦊'],
+  }},
+  {id:'panda',emoji:'🐼',name:'パンダ',lines:{
+    ready_questioner:['ゆっくりえらんでいいよ〜🍃','いいもんだいをかんがえてね〜','のんびりいこう〜🐼'],
+    ready_answerer:['だいじょうぶだよ〜🍃','ゆっくりかけばいいよ〜🐼','おちついて〜✨'],
+    answer_answerer:['ゆっくりかいてね〜🍃','じぶんのペースでいいよ〜🐼','おちついて〜✨'],
+    answer_questioner:['のんびりみてあげてね〜🍃','やさしくさいてんしてね〜🐼','じっくりみてね〜'],
+    correct2:['やったー！かんぺき〜🎉🐼','すごいすごい！かきじゅんもね〜✨','よくできました〜！🍃🎉'],
+    correct1:['せいかい〜！えらいね〜🐼','かけたね〜！よかった〜🍃','そのちょうし〜✨'],
+    wrong:['ドンマイ〜🐼🍃','つぎがあるよ〜のんびりいこう','きにしないで〜✨'],
+    pass:['パスもいいよ〜🍃','つぎのもんだいでね〜🐼','のんびりいこう〜'],
+    turnaround:['こうたいだよ〜🐼🍃','きもちをきりかえて〜✨','ゆっくりいこう〜'],
+    winning:['このちょうし〜🐼✨','いいね〜のんびりがんばろう🍃','すてきだよ〜🐼'],
+    losing:['だいじょうぶだよ〜🍃','ゆっくりおいつこう〜🐼','まだまだよ〜✨'],
+    tied:['いいしょうぶだよ〜🐼','どっちもえらいね〜🍃','たのしくいこう〜✨'],
+  }},
+  {id:'owl',emoji:'🦉',name:'フクロウ',lines:{
+    ready_questioner:['よいもんだいをえらぶのじゃ📚','かんじのれんしゅうはたいせつじゃぞ🦉','しっかりかんがえてえらぶのじゃ'],
+    ready_answerer:['おちついてかくのじゃぞ📚','ひとかくひとかく、ていねいにな🦉','かならずかけるぞ！じしんをもて'],
+    answer_answerer:['ていねいにかくのじゃぞ📚','かきじゅんもわすれずに🦉','しっかりとかくのじゃ！'],
+    answer_questioner:['しっかりとみてあげるのじゃぞ📚','かきじゅんもちゅうもくするのじゃ🦉','せいかくなさいてんをたのむぞ'],
+    correct2:['みごとじゃ！かきじゅんもかんぺき！📚🎉','すばらしい！これがほんものの実力じゃ🦉','よくがんばったのじゃ！２ポイントじゃ！'],
+    correct1:['せいかいじゃ！よくがんばったぞ📚','かけたのじゃ！えらいぞ🦉','そのちょうしでまいるのじゃ！'],
+    wrong:['ドンマイじゃ！つぎにいかすのじゃぞ📚','まけるな！またちゃんすはくるぞ🦉','あきらめずにがんばるのじゃ！'],
+    pass:['パスか…つぎでとりもどすのじゃぞ📚','きもちをきりかえるのじゃ🦉','しっかりたてなおすのじゃ！'],
+    turnaround:['こうたいじゃ！きもちをきりかえるのじゃ📚','つぎのターン、しっかりがんばるのじゃぞ🦉','よし、こうたいじゃ！'],
+    winning:['このちょうしでまいるのじゃ！📚','すばらしい！このままいくのじゃぞ🦉','つよいのじゃ！まけるでないぞ！'],
+    losing:['あきらめてはならぬ！📚','おいつくのじゃ！まだまだぞ🦉','ここからじゃ！がんばれ！'],
+    tied:['よいしょうぶじゃのう📚','どちらもよくがんばっておるぞ🦉','さいごまでわからぬのじゃ！'],
+  }},
+];
+function pickChars(){const s=[...CHARACTERS].sort(()=>Math.random()-0.5);return[s[0],s[1]];}
+function getLine(ch,key){const ls=ch.lines[key]||['がんばれ！'+ch.emoji];return ls[Math.floor(Math.random()*ls.length)];}
+
+// ===== 効果音 =====
+function useSound(){
+  const ctx=useRef(null);
+  const gc=()=>{if(!ctx.current)ctx.current=new(window.AudioContext||window.webkitAudioContext)();return ctx.current;};
+  return useCallback((type)=>{
+    try{
+      const ac=gc();
+      if(type==='correct2'){
+        [0,0.12,0.25].forEach((t,i)=>{
+          const o=ac.createOscillator(),g=ac.createGain();
+          o.connect(g);g.connect(ac.destination);
+          o.type='sine';o.frequency.value=[523,659,880][i];
+          g.gain.setValueAtTime(0.25,ac.currentTime+t);
+          g.gain.linearRampToValueAtTime(0,ac.currentTime+t+0.18);
+          o.start(ac.currentTime+t);o.stop(ac.currentTime+t+0.18);
+        });
+      }else if(type==='correct1'){
+        const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);
+        o.type='sine';o.frequency.setValueAtTime(523,ac.currentTime);
+        o.frequency.linearRampToValueAtTime(659,ac.currentTime+0.2);
+        g.gain.setValueAtTime(0.25,ac.currentTime);g.gain.linearRampToValueAtTime(0,ac.currentTime+0.3);
+        o.start();o.stop(ac.currentTime+0.3);
+      }else if(type==='wrong'){
+        const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);
+        o.type='sawtooth';o.frequency.setValueAtTime(300,ac.currentTime);
+        o.frequency.linearRampToValueAtTime(150,ac.currentTime+0.3);
+        g.gain.setValueAtTime(0.15,ac.currentTime);g.gain.linearRampToValueAtTime(0,ac.currentTime+0.3);
+        o.start();o.stop(ac.currentTime+0.3);
+      }else if(type==='pass'){
+        const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);
+        o.type='sine';o.frequency.setValueAtTime(400,ac.currentTime);
+        o.frequency.linearRampToValueAtTime(300,ac.currentTime+0.15);
+        g.gain.setValueAtTime(0.15,ac.currentTime);g.gain.linearRampToValueAtTime(0,ac.currentTime+0.2);
+        o.start();o.stop(ac.currentTime+0.2);
+      }else if(type==='start'){
+        [0,0.12,0.24].forEach((t,i)=>{
+          const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);
+          o.type='sine';o.frequency.value=[523,659,784][i];
+          g.gain.setValueAtTime(0.2,ac.currentTime+t);g.gain.linearRampToValueAtTime(0,ac.currentTime+t+0.15);
+          o.start(ac.currentTime+t);o.stop(ac.currentTime+t+0.15);
+        });
+      }
+    }catch(e){}
+  },[]);
+}
+
+// ===== 紙吹雪 =====
+function Confetti({active}){
+  const ref=useRef(null);const anim=useRef(null);
+  useEffect(()=>{
+    if(!active)return;
+    const c=ref.current;if(!c)return;
+    const ctx=c.getContext('2d');
+    c.width=window.innerWidth;c.height=window.innerHeight;
+    const ps=Array.from({length:80},()=>({
+      x:Math.random()*c.width,y:-10-Math.random()*100,
+      w:8+Math.random()*8,h:5+Math.random()*5,
+      color:['#ffd700','#ff6b6b','#48dbfb','#ff9ff3','#54a0ff','#5f27cd','#00d2d3'][Math.floor(Math.random()*7)],
+      vx:(Math.random()-0.5)*3,vy:2+Math.random()*3,angle:Math.random()*Math.PI*2,va:(Math.random()-0.5)*0.2,
+    }));
+    let frame=0;
+    const draw=()=>{
+      ctx.clearRect(0,0,c.width,c.height);
+      ps.forEach(p=>{ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.angle);ctx.fillStyle=p.color;ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);ctx.restore();p.x+=p.vx;p.y+=p.vy;p.angle+=p.va;});
+      frame++;if(frame<90)anim.current=requestAnimationFrame(draw);else ctx.clearRect(0,0,c.width,c.height);
+    };
+    anim.current=requestAnimationFrame(draw);
+    return()=>{if(anim.current)cancelAnimationFrame(anim.current);};
+  },[active]);
+  return h('canvas',{ref,style:{position:'fixed',top:0,left:0,width:'100vw',height:'100vh',pointerEvents:'none',zIndex:9999,display:active?'block':'none'}});
+}
+
+// ===== キャラクター吹き出し =====
+function CharBubble({ch,comment,rotated,playerNum}){
+  const color=playerNum===1?'#c0392b':'#16a085';
+  if(!ch)return null;
+  return h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:6,transform:rotated?'rotate(180deg)':'none',maxWidth:130}},
+    h('div',{style:{textAlign:'center'}},
+      h('div',{style:{fontSize:40,lineHeight:1,filter:'drop-shadow(0 2px 4px rgba(0,0,0,0.15))',display:'inline-block',animation:comment?'bounce 0.5s ease':'none'}},ch.emoji),
+      h('div',{style:{fontSize:9,color:'#999',marginTop:2}},ch.name)
+    ),
+    comment&&h('div',{style:{background:'white',border:'2px solid '+color,borderRadius:12,padding:'6px 10px',fontSize:11,fontWeight:700,color:'#333',textAlign:'center',lineHeight:1.5,maxWidth:130,position:'relative',boxShadow:'0 2px 8px rgba(0,0,0,0.1)',animation:'pop 0.3s ease'}},
+      h('div',{style:{position:'absolute',top:-8,left:'50%',transform:'translateX(-50%)',width:0,height:0,borderLeft:'6px solid transparent',borderRight:'6px solid transparent',borderBottom:'8px solid '+color}}),
+      h('div',{style:{position:'absolute',top:-5,left:'50%',transform:'translateX(-50%)',width:0,height:0,borderLeft:'5px solid transparent',borderRight:'5px solid transparent',borderBottom:'7px solid white'}}),
+      comment
+    )
+  );
+}
+
+// ===== 画面向き =====
+function useIsLandscape(){
+  const[v,s]=useState(window.innerWidth>window.innerHeight);
+  useEffect(()=>{
+    const u=()=>s(window.innerWidth>window.innerHeight);
+    window.addEventListener('resize',u);window.addEventListener('orientationchange',u);
+    return()=>{window.removeEventListener('resize',u);window.removeEventListener('orientationchange',u);};
+  },[]);
+  return v;
+}
+
+// ===== 描画キャンバス =====
+function DrawingCanvas({disabled,clearSignal,rotated}){
+  const ref=useRef(null);
+  const drawing=useRef(false);
+  const[strokes,setStrokes]=useState(0);
+  const cur=useRef([]);const all=useRef([]);const ctx=useRef(null);
+  const guide=(c)=>{
+    c.clearRect(0,0,300,300);c.strokeStyle='#d4c9f0';c.lineWidth=2;c.strokeRect(2,2,296,296);
+    c.strokeStyle='#e2daf5';c.lineWidth=1;c.setLineDash([6,4]);
+    c.beginPath();c.moveTo(150,8);c.lineTo(150,292);c.moveTo(8,150);c.lineTo(292,150);c.stroke();c.setLineDash([]);
+  };
+  useEffect(()=>{const c=ref.current.getContext('2d');ctx.current=c;c.lineCap='round';c.lineJoin='round';guide(c);},[]);
+  useEffect(()=>{all.current=[];cur.current=[];setStrokes(0);if(ctx.current)guide(ctx.current);},[clearSignal]);
+  const pos=(e)=>{
+    const r=ref.current.getBoundingClientRect();
+    const sx=300/r.width,sy=300/r.height;
+    const cx=e.touches?e.touches[0].clientX:e.clientX;
+    const cy=e.touches?e.touches[0].clientY:e.clientY;
+    const rx=(cx-r.left)*sx,ry=(cy-r.top)*sy;
+    return rotated?{x:300-rx,y:300-ry}:{x:rx,y:ry};
+  };
+  const start=(e)=>{if(disabled)return;e.preventDefault();drawing.current=true;const p=pos(e);cur.current=[p];const c=ctx.current;c.strokeStyle='#1a0a3e';c.lineWidth=5;c.beginPath();c.moveTo(p.x,p.y);};
+  const move=(e)=>{if(!drawing.current||disabled)return;e.preventDefault();const p=pos(e);cur.current.push(p);ctx.current.lineTo(p.x,p.y);ctx.current.stroke();};
+  const end=(e)=>{if(!drawing.current)return;e.preventDefault();drawing.current=false;all.current=[...all.current,cur.current];setStrokes(all.current.length);cur.current=[];};
+  const clear=()=>{all.current=[];cur.current=[];setStrokes(0);guide(ctx.current);};
+  return h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:10,transform:rotated?'rotate(180deg)':'none'}},
+    h('canvas',{ref,width:300,height:300,style:{borderRadius:16,background:'#faf7f2',cursor:disabled?'not-allowed':'crosshair',touchAction:'none',boxShadow:disabled?'none':'0 6px 24px rgba(45,27,105,0.18)',width:'min(300px,85vw)',height:'min(300px,85vw)',opacity:disabled?0.4:1,transition:'opacity 0.3s'},
+      onMouseDown:start,onMouseMove:move,onMouseUp:end,onMouseLeave:end,
+      onTouchStart:start,onTouchMove:move,onTouchEnd:end}),
+    h('div',{style:{display:'flex',alignItems:'center',gap:16}},
+      h('button',{onClick:clear,disabled,style:{padding:'5px 18px',borderRadius:20,border:'2px solid #7c5cbf',background:'transparent',color:'#7c5cbf',cursor:disabled?'not-allowed':'pointer',fontSize:13,fontWeight:600,opacity:disabled?0.4:1}},'けす'),
+      h('span',{style:{fontSize:12,color:'#aaa'}},'ストローク: '+strokes)
+    )
+  );
+}
+
+// ===== スコアパネル =====
+function ScorePanel({playerNum,score,passes,isAnswerer,isActive,onPass,onUndoPass,isQuestioner,phase,onJudge,onUndoJudge,rotated}){
+  const color=playerNum===1?'#c0392b':'#16a085';
+  const lightBg=playerNum===1?'#fff4f3':'#f0faf7';
+  const judgeButtons=[
+    {label:'✗ まちがい',sub:'0点',pts:0,c:'#e74c3c',bg:'#fdecea'},
+    {label:'✓ せいかい',sub:'+1点',pts:1,c:'#e67e22',bg:'#fff9e6'},
+    {label:'🎯 かきじゅんも',sub:'+2点',pts:2,c:'#27ae60',bg:'#e8f8f0'},
+  ];
+  return h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:10,padding:'18px 14px',borderRadius:18,background:isActive?lightBg:'#f7f7f7',border:'3px solid '+(isActive?color:'#e0e0e0'),minWidth:120,maxWidth:150,boxShadow:isActive?'0 4px 18px '+color+'35':'none',transition:'all 0.35s',transform:rotated?'rotate(180deg)':'none'}},
+    h('div',{style:{fontSize:12,fontWeight:800,letterSpacing:2,color:isActive?color:'#bbb'}},'P'+playerNum),
+    h('div',{style:{fontSize:56,fontWeight:900,lineHeight:1,color:isActive?color:'#ccc',fontFamily:"'Noto Serif JP',serif",transition:'color 0.3s'}},score),
+    h('div',{style:{fontSize:11,color:'#aaa'}},'点'),
+    isAnswerer&&h(Fragment,null,
+      h('div',{style:{display:'flex',gap:5,marginTop:2}},
+        [0,1,2].map(i=>h('div',{key:i,style:{width:14,height:14,borderRadius:'50%',background:i<passes?color:'#e0e0e0',border:'2px solid '+(i<passes?color:'#ccc'),transition:'all 0.3s'}}))
+      ),
+      h('div',{style:{fontSize:11,color:'#999'}},'パス '+passes+'/3'),
+      h('button',{onClick:onPass,disabled:passes>=3||!isActive,style:{padding:'9px 0',width:'100%',borderRadius:22,border:'2px solid '+(isActive&&passes<3?color:'#ddd'),background:isActive&&passes<3?color:'#eee',color:isActive&&passes<3?'white':'#bbb',cursor:isActive&&passes<3?'pointer':'not-allowed',fontSize:14,fontWeight:700,transition:'all 0.2s'}},'パス'),
+      passes>0&&phase==='ready'&&h('button',{onClick:onUndoPass,style:{padding:'7px 0',width:'100%',borderRadius:22,border:'2px solid #888',background:'#f0f0f0',color:'#555',cursor:'pointer',fontSize:11,fontWeight:700}},'↩ もどる')
+    ),
+    !isAnswerer&&h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:8,width:'100%'}},
+      h('div',{style:{fontSize:11,color:isActive?color:'#bbb',fontWeight:700,letterSpacing:1}},isActive?'📖 しゅつだい中':'まちじかん'),
+      isQuestioner&&phase==='answer'&&h('div',{style:{display:'flex',flexDirection:'column',gap:6,width:'100%',marginTop:4}},
+        h('div',{style:{fontSize:10,color:'#999',textAlign:'center'}},h(R,{k:'採点',r:'さいてん'})),
+        judgeButtons.map(({label,sub,pts,c,bg})=>h('button',{key:pts,onClick:()=>onJudge(pts),style:{padding:'8px 4px',borderRadius:10,border:'2px solid '+c,background:bg,color:c,fontSize:11,fontWeight:700,cursor:'pointer',lineHeight:1.4,width:'100%'}},label,h('br'),sub))
+      ),
+      isQuestioner&&phase==='result'&&h('button',{onClick:onUndoJudge,style:{padding:'8px 6px',width:'100%',borderRadius:10,border:'2px solid #888',background:'#f0f0f0',color:'#555',cursor:'pointer',fontSize:11,fontWeight:700}},'↩ まちがえた',h('br'),'もどる')
+    )
+  );
+}
+
+// ===== 準備カード =====
+function ReadyCard({questioner,onReady,rotated,compact}){
+  return h('div',{style:{background:'white',borderRadius:16,padding:compact?'16px 14px':'24px 20px',boxShadow:'0 4px 20px rgba(45,27,105,0.12)',border:'2px solid #2d1b69',textAlign:'center',maxWidth:compact?160:360,transform:rotated?'rotate(180deg)':'none'}},
+    h('div',{style:{fontSize:compact?28:40,marginBottom:8}},'📖'),
+    h('div',{style:{fontFamily:"'Noto Serif JP',serif",fontSize:compact?14:18,color:'#1a0a3e',fontWeight:700,marginBottom:6}},'P'+(questioner+1)+'（しゅつだいしゃ）へ'),
+    h('div',{style:{fontSize:compact?11:13,color:'#666',lineHeight:1.8,marginBottom:compact?12:18}},'かんじをえらんで、',h('br'),'じゅんびができたらおしてください'),
+    h('button',{onClick:onReady,style:{padding:compact?'10px 18px':'12px 28px',borderRadius:24,background:'linear-gradient(135deg,#2d1b69,#16a085)',border:'none',color:'white',fontSize:compact?13:15,fontWeight:700,cursor:'pointer',boxShadow:'0 3px 12px rgba(45,27,105,0.3)'}},'じゅんびかんりょう →')
+  );
+}
+
+// ===== 対戦モード =====
+function VsMode({totalRounds,onEnd}){
+  const totalQ=totalRounds*2;
+  const[phase,setPhase]=useState('ready');
+  const[scores,setScores]=useState([0,0]);
+  const[passes,setPasses]=useState(0);
+  const[qNum,setQNum]=useState(1);
+  const[roundResult,setRoundResult]=useState(null);
+  const[log,setLog]=useState([]);
+  const[clearSig,setClearSig]=useState(0);
+  const[passSnap,setPassSnap]=useState(null);
+  const[confetti,setConfetti]=useState(false);
+  const[characters]=useState(()=>pickChars());
+  const[comments,setComments]=useState(['','']);
+  const isLandscape=useIsLandscape();
+  const playSound=useSound();
+
+  const questioner=qNum%2===1?0:1;
+  const answerer=qNum%2===1?1:0;
+  const canvasR=answerer===1;
+  const isLast=qNum>=totalQ;
+  const addLog=(m)=>setLog(l=>[m,...l.slice(0,9)]);
+  const say=(p1k,p2k)=>setComments([getLine(characters[0],p1k),getLine(characters[1],p2k)]);
+  const scoreKey=(p)=>{const m=scores[p],o=scores[1-p];return m>o?'winning':m<o?'losing':'tied';};
+
+  useEffect(()=>{say('ready_questioner','ready_answerer');},[]);
+
+  const handleReady=()=>{setClearSig(s=>s+1);setPhase('answer');if(answerer===0)say('answer_answerer','answer_questioner');else say('answer_questioner','answer_answerer');};
+  const handlePass=()=>{
+    setPassSnap({passes,qNum});playSound('pass');
+    const np=passes+1;
+    if(np>=3){
+      addLog('P'+(answerer+1)+'がパス3かい→スキップ！');setPasses(0);setClearSig(s=>s+1);
+      const next=qNum+1;if(next>totalQ){onEnd(scores);return;}
+      setQNum(next);setPhase('ready');say('turnaround','turnaround');
+    }else{
+      setPasses(np);addLog('P'+(answerer+1)+'がパス('+np+'/3)');setClearSig(s=>s+1);setPhase('ready');
+      if(answerer===0)say('pass','ready_questioner');else say('ready_questioner','pass');
+    }
+  };
+  const handleUndoPass=()=>{if(!passSnap)return;setPasses(passSnap.passes);setQNum(passSnap.qNum);setPassSnap(null);setLog(l=>l.slice(1));setClearSig(s=>s+1);setPhase('ready');setComments(['','']);};
+  const judge=(pts)=>{
+    const ns=[...scores];ns[answerer]+=pts;setScores(ns);
+    const label=pts===2?'かきじゅんもせいかい🎉+2点':pts===1?'せいかい✓+1点':'まちがい✗0点';
+    addLog('P'+(answerer+1)+': '+label);setRoundResult(pts);setPhase('result');
+    if(pts===2){playSound('correct2');setConfetti(true);setTimeout(()=>setConfetti(false),2000);}
+    else if(pts===1)playSound('correct1');else playSound('wrong');
+    const wk=pts===2?'correct2':pts===1?'correct1':'wrong';
+    if(answerer===0)say(wk,scoreKey(1));else say(scoreKey(0),wk);
+  };
+  const undoJudge=()=>{const ns=[...scores];ns[answerer]-=roundResult;setScores(ns);setLog(l=>l.slice(1));setRoundResult(null);setPhase('answer');setComments(['','']);};
+  const nextRound=()=>{
+    const next=qNum+1;if(next>totalQ){onEnd(scores);return;}
+    setPasses(0);setRoundResult(null);setPassSnap(null);setQNum(next);setClearSig(s=>s+1);setPhase('ready');
+    const nq=next%2===1?0:1;
+    if(nq===0)say('ready_questioner','ready_answerer');else say('ready_answerer','ready_questioner');
+  };
+
+  const resultColor=roundResult===2?'#27ae60':roundResult===1?'#e67e22':'#e74c3c';
+  const resultBg=roundResult===2?'#e8f8f0':roundResult===1?'#fff9e6':'#fdecea';
+  const resultBorder=roundResult===2?'#27ae60':roundResult===1?'#f39c12':'#e74c3c';
+  const resultText=roundResult===2?'🎉 かきじゅんもせいかい！ +2点':roundResult===1?'✓ せいかい！ +1点':'✗ まちがい 0点';
+
+  const p1done=Math.floor(qNum/2);
+  const p2done=Math.floor((qNum-1)/2);
+
+  return h('div',{style:{minHeight:'100vh',background:'#f2ede6',display:'flex',flexDirection:'column'}},
+    h(Confetti,{active:confetti}),
+    // ヘッダー
+    h('div',{style:{background:'linear-gradient(90deg,#2d1b69,#1a3a2a)',padding:'8px 12px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}},
+      h('span',{style:{color:'white',fontFamily:"'Noto Serif JP',serif",fontSize:14,letterSpacing:1,flexShrink:0}},h(R,{k:'漢字',r:'かんじ'}),'バトル'),
+      h('div',{style:{display:'flex',flexDirection:'column',gap:3,alignItems:'center',flex:1}},
+        h('div',{style:{display:'flex',alignItems:'center',gap:4}},
+          h('span',{style:{color:'#f1948a',fontSize:10,fontWeight:700,minWidth:20}},'P1'),
+          h('div',{style:{display:'flex',gap:3}},
+            Array.from({length:totalRounds},(_,i)=>h('div',{key:i,style:{width:8,height:8,borderRadius:'50%',background:i<p1done?'#c0392b':'rgba(255,255,255,0.25)',transition:'background 0.3s'}}))
+          )
+        ),
+        h('div',{style:{display:'flex',alignItems:'center',gap:4}},
+          h('span',{style:{color:'#82e0aa',fontSize:10,fontWeight:700,minWidth:20}},'P2'),
+          h('div',{style:{display:'flex',gap:3}},
+            Array.from({length:totalRounds},(_,i)=>h('div',{key:i,style:{width:8,height:8,borderRadius:'50%',background:i<p2done?'#16a085':'rgba(255,255,255,0.25)',transition:'background 0.3s'}}))
+          )
+        )
+      ),
+      h('span',{style:{color:'#c5bbee',fontSize:11,fontWeight:700,flexShrink:0,textAlign:'right'}},qNum+'/',totalQ,h('br'),'もん')
+    ),
+    // メイン
+    h('div',{style:{flex:1,display:'flex',flexDirection:'row',alignItems:'stretch',justifyContent:'center',gap:isLandscape?8:10,padding:isLandscape?'8px 6px':'12px 8px',overflow:'hidden'}},
+      // P1
+      h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8}},
+        h(CharBubble,{ch:characters[0],comment:comments[0],rotated:false,playerNum:1}),
+        h(ScorePanel,{playerNum:1,score:scores[0],passes,isAnswerer:answerer===0,isActive:questioner===0||answerer===0,onPass:handlePass,onUndoPass:handleUndoPass,isQuestioner:questioner===0,phase,onJudge:judge,onUndoJudge:undoJudge,rotated:false}),
+        isLandscape&&questioner===0&&phase==='ready'&&h(ReadyCard,{questioner,onReady:handleReady,rotated:false,compact:true})
+      ),
+      // 中央
+      h('div',{style:{flex:1,minWidth:isLandscape?220:260,maxWidth:isLandscape?340:420,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:10}},
+        h('div',{style:{display:'flex',gap:6,width:'100%'}},
+          [0,1].map(i=>h('div',{key:i,style:{flex:1,padding:'6px 0',borderRadius:20,textAlign:'center',background:i===questioner?'#2d1b69':'#16a085',color:'white',fontSize:11,fontWeight:700}},'P'+(i+1)+'　'+(i===questioner?'📖 しゅつだい':'✏️ かいとう')))
+        ),
+        phase==='ready'&&h(ReadyCard,{questioner,onReady:handleReady,rotated:false}),
+        (phase==='answer'||phase==='result')&&h('div',{style:{background:'white',borderRadius:16,padding:'14px 12px',boxShadow:'0 6px 24px rgba(45,27,105,0.12)',border:'2px solid '+(phase==='result'?resultBorder:'#16a085'),width:'100%',textAlign:'center',transition:'border-color 0.3s'}},
+          h('div',{style:{fontSize:12,color:'#888',marginBottom:8,transform:canvasR?'rotate(180deg)':'none'}},'P'+(answerer+1),'（',h(R,{k:'回答者',r:'かいとうしゃ'}),'）',h(R,{k:'漢字',r:'かんじ'}),'をかいてください'),
+          phase==='result'&&h('div',{style:{padding:'10px 14px',borderRadius:12,marginBottom:10,background:resultBg,border:'2px solid '+resultBorder,transform:canvasR?'rotate(180deg)':'none',textAlign:'center'}},
+            h('div',{style:{fontSize:14,fontWeight:700,color:resultColor}},resultText)
+          ),
+          h(DrawingCanvas,{disabled:phase==='result',clearSignal:clearSig,rotated:canvasR}),
+          phase==='result'&&h('button',{onClick:nextRound,style:{marginTop:12,padding:'11px 0',width:'100%',borderRadius:24,background:'linear-gradient(135deg,#2d1b69,#16a085)',border:'none',color:'white',fontSize:14,fontWeight:700,cursor:'pointer',transform:canvasR?'rotate(180deg)':'none'}},isLast?'けっかをみる':'つぎのもんだいへ →')
+        ),
+        log.length>0&&h('div',{style:{width:'100%',background:'rgba(45,27,105,0.05)',borderRadius:10,padding:'6px 10px'}},
+          log.slice(0,3).map((l,i)=>h('div',{key:i,style:{fontSize:10,color:'#777',padding:'2px 0',opacity:Math.max(0.3,1-i*0.28),borderBottom:i<2?'1px solid rgba(0,0,0,0.05)':'none'}},l))
+        )
+      ),
+      // P2
+      h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8}},
+        h(CharBubble,{ch:characters[1],comment:comments[1],rotated:true,playerNum:2}),
+        h(ScorePanel,{playerNum:2,score:scores[1],passes,isAnswerer:answerer===1,isActive:questioner===1||answerer===1,onPass:handlePass,onUndoPass:handleUndoPass,isQuestioner:questioner===1,phase,onJudge:judge,onUndoJudge:undoJudge,rotated:true}),
+        isLandscape&&questioner===1&&phase==='ready'&&h(ReadyCard,{questioner,onReady:handleReady,rotated:true,compact:true})
+      )
+    )
+  );
+}
+
+// ===== 終了画面 =====
+function VsResult({scores,onRetry,onHome}){
+  const winner=scores[0]>scores[1]?1:scores[1]>scores[0]?2:0;
+  const chars=pickChars();
+  return h('div',{style:{minHeight:'100vh',background:'linear-gradient(160deg,#120826,#2d1b69 55%,#0d2b1e)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24,fontFamily:"'Noto Sans JP',sans-serif"}},
+    h(Confetti,{active:winner>0}),
+    h('div',{style:{fontSize:44,marginBottom:8,letterSpacing:4}},chars[0].emoji+' '+chars[1].emoji),
+    h('div',{style:{color:'#ffd700',fontFamily:"'Noto Serif JP',serif",fontSize:34,marginBottom:4}},'ゲームしゅうりょう！'),
+    h('div',{style:{color:'rgba(255,255,255,0.7)',fontSize:14,marginBottom:16}},'よくがんばった！ふたりともえらいぞ！🎉'),
+    h('div',{style:{color:'rgba(255,255,255,0.9)',fontSize:18,marginBottom:24}},
+      winner>0?h(Fragment,null,h('span',{style:{color:'#ffd700',fontWeight:700}},'P'+winner),' のかち！🏆'):'ひきわけ！🤝'
+    ),
+    h('div',{style:{display:'flex',gap:20,marginBottom:32}},
+      [0,1].map(i=>h('div',{key:i,style:{background:winner===i+1?'rgba(255,215,0,0.15)':'rgba(255,255,255,0.08)',border:'2px solid '+(winner===i+1?'#ffd700':'rgba(255,255,255,0.15)'),borderRadius:18,padding:'24px 36px',textAlign:'center'}},
+        h('div',{style:{color:'#9d8fd4',fontSize:13,marginBottom:4}},'P'+(i+1)),
+        h('div',{style:{color:winner===i+1?'#ffd700':'white',fontSize:60,fontWeight:900}},scores[i]),
+        h('div',{style:{color:'#9d8fd4',fontSize:13}},'点')
+      ))
+    ),
+    h('div',{style:{display:'flex',gap:12}},
+      h('button',{onClick:onRetry,style:{padding:'13px 32px',borderRadius:28,background:'linear-gradient(135deg,#ffd700,#ff9500)',border:'none',color:'#1a0826',fontSize:16,fontWeight:700,cursor:'pointer'}},'もういちど'),
+      h('button',{onClick:onHome,style:{padding:'13px 32px',borderRadius:28,background:'rgba(255,255,255,0.15)',border:'2px solid rgba(255,255,255,0.3)',color:'white',fontSize:16,fontWeight:700,cursor:'pointer'}},'タイトルへ')
+    )
+  );
+}
+
+// ===== スタート画面 =====
+function StartScreen({onStart}){
+  const[rounds,setRounds]=useState(null);
+  const opts=[3,5,7,10];
+  return h('div',{style:{minHeight:'100vh',background:'linear-gradient(160deg,#120826 0%,#2d1b69 55%,#0d2b1e 100%)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',fontFamily:"'Noto Sans JP',sans-serif",padding:24}},
+    h('div',{style:{textAlign:'center',marginBottom:32}},
+      h('div',{style:{fontSize:44,marginBottom:8,letterSpacing:4}},'🐯 🦊 🐼 🦉'),
+      h('div',{style:{fontSize:11,letterSpacing:5,color:'#9d8fd4',marginBottom:10}},'かんじの べんきょう ゲーム'),
+      h('h1',{style:{margin:0,fontSize:'clamp(44px,12vw,80px)',fontFamily:"'Noto Serif JP',serif",color:'white',letterSpacing:6,textShadow:'0 0 60px rgba(157,143,212,0.5)'}},h(R,{k:'漢字',r:'かんじ'}),'バトル'),
+      h('div',{style:{color:'#ffd700',fontSize:13,marginTop:8,fontWeight:700}},'～ キャラクターがランダムでおうえんするよ！ ～')
+    ),
+    h('div',{style:{background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.15)',borderRadius:20,padding:'24px 28px',maxWidth:400,width:'100%',marginBottom:20}},
+      h('div',{style:{color:'#ffd700',fontSize:15,fontWeight:700,marginBottom:16,textAlign:'center'}},'もんだいすうをえらんでね（おたがいに○もんずつ）'),
+      h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}},
+        opts.map(r=>h('button',{key:r,onClick:()=>setRounds(r),style:{padding:'14px 8px',borderRadius:14,border:'3px solid '+(rounds===r?'#ffd700':'rgba(255,255,255,0.2)'),background:rounds===r?'rgba(255,215,0,0.15)':'rgba(255,255,255,0.06)',color:'white',cursor:'pointer',textAlign:'center',transition:'all 0.2s'}},
+          h('div',{style:{fontSize:28,fontWeight:900,fontFamily:"'Noto Serif JP',serif"}},r),
+          h('div',{style:{fontSize:11,color:'rgba(255,255,255,0.7)'}},'もんずつ')
+        ))
+      )
+    ),
+    rounds&&h('button',{onClick:()=>onStart(rounds),style:{padding:'16px 56px',borderRadius:40,fontSize:20,fontWeight:700,background:'linear-gradient(135deg,#ffd700,#ff9500)',border:'none',color:'#1a0826',cursor:'pointer',fontFamily:"'Noto Serif JP',serif",letterSpacing:4,boxShadow:'0 6px 24px rgba(255,200,0,0.45)',marginBottom:20,animation:'pulse 1s infinite'}},'ゲームスタート！🔥'),
+    h('div',{style:{maxWidth:400,width:'100%'}},
+      h('details',{style:{background:'rgba(255,255,255,0.05)',borderRadius:14,padding:'12px 18px',cursor:'pointer'}},
+        h('summary',{style:{color:'#9d8fd4',fontSize:13,fontWeight:700,listStyle:'none'}},'📜 ルールをみる'),
+        h('div',{style:{marginTop:12,display:'flex',flexDirection:'column',gap:6}},
+          [['👥','1人がきょうかしょからかんじをえらんで出題。もう1人がキャンバスにかく'],
+           ['✅','かけた→+1点　かきじゅんもただしい→+2点'],
+           ['⏭','パスは2かいまで（3かいでスキップ）'],
+           ['🔄','1もんごとに出題者と回答者がこうたい'],
+           ['🪑','P1はひだりがわ、P2はみぎがわからみてね'],
+          ].map(([ic,tx],i)=>h('div',{key:i,style:{display:'flex',gap:8,alignItems:'flex-start',color:'rgba(255,255,255,0.8)',fontSize:12,lineHeight:1.7}},h('span',{style:{flexShrink:0}},ic),h('span',null,tx)))
+        )
+      )
+    )
+  );
+}
+
+// ===== アプリ =====
+function App(){
+  const[screen,setScreen]=useState('start');
+  const[totalRounds,setTotalRounds]=useState(5);
+  const[vsScores,setVsScores]=useState([0,0]);
+  const handleStart=(r)=>{setTotalRounds(r);setScreen('vs');};
+  const handleVsEnd=(s)=>{setVsScores(s);setScreen('result');};
+  if(screen==='start')return h(StartScreen,{onStart:handleStart});
+  if(screen==='vs')return h(VsMode,{key:Date.now(),totalRounds,onEnd:handleVsEnd});
+  if(screen==='result')return h(VsResult,{scores:vsScores,onRetry:()=>setScreen('vs'),onHome:()=>setScreen('start')});
+  return null;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(h(App,null));
+</script>
+</body>
+</html>
